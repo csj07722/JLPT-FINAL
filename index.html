@@ -22,8 +22,8 @@ button{-webkit-appearance:none;appearance:none;}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;min-height:100vh;min-height:100dvh;overflow:hidden;-webkit-font-smoothing:antialiased;}
 
 /* ── SCREENS ── */
-.screen{position:fixed;inset:0;display:flex;flex-direction:column;transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .35s ease;will-change:transform;}
-.screen.hidden{transform:translateX(100%);opacity:0;pointer-events:none;}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .35s ease;will-change:transform;visibility:visible;}
+.screen.hidden{transform:translateX(100%);opacity:0;pointer-events:none;visibility:hidden;}
 
 /* ── HOME ── */
 #home-screen{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(28px + var(--safe-bottom));}
@@ -102,7 +102,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 .card-back-kanji{font-size:50px;line-height:1;font-weight:300;}
 .card-desc{font-size:20px;font-weight:700;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 .card-meta{font-size:12px;color:var(--text2);}
-.flash-footer{padding:10px 20px calc(10px + var(--safe-bottom));display:flex;flex-direction:column;gap:10px;flex-shrink:0;background:var(--bg);position:relative;z-index:9999;border-top:1px solid var(--border);}
+.flash-footer{padding:10px 20px calc(10px + var(--safe-bottom));display:flex;flex-direction:column;gap:10px;flex-shrink:0;background:var(--bg);position:relative;z-index:2;border-top:1px solid var(--border);}
 .nav-btns{display:flex;gap:10px;}
 .nav-btn{flex:1;padding:12px 0;border-radius:12px;font-size:15px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;text-align:center;transition:all .15s;}
 .nav-btn:active{transform:scale(.96);background:var(--surface2);}
@@ -123,7 +123,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 .prog-bar-track{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;display:flex;}
 
 /* ── QUIZ SCREEN ── */
-#quiz-screen{background:var(--bg);}
+#quiz-screen{background:var(--bg);position:relative;overflow:hidden;}
 .quiz-body{flex:1;display:flex;flex-direction:column;padding:16px 20px calc(16px + var(--safe-bottom));gap:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;}
 .quiz-prog-wrap{display:flex;align-items:center;gap:10px;}
 .quiz-prog-bar{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;}
@@ -169,8 +169,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 .detail-sheet .next-btn{margin-top:14px;width:100%;}
 
 /* ── RESULT OVERLAY ── */
-.result-overlay{position:absolute;bottom:0;left:0;right:0;padding:20px 20px calc(20px + var(--safe-bottom));background:var(--surface);border-top:1px solid var(--border);border-radius:24px 24px 0 0;display:flex;flex-direction:column;gap:12px;transform:translateY(100%);transition:transform .32s cubic-bezier(.4,0,.2,1);z-index:50;box-shadow:0 -8px 40px rgba(0,0,0,.6);}
-.result-overlay.show{transform:translateY(0);}
+.result-overlay{position:absolute;bottom:0;left:0;right:0;padding:20px 20px calc(20px + var(--safe-bottom));background:var(--surface);border-top:1px solid var(--border);border-radius:24px 24px 0 0;display:flex;flex-direction:column;gap:12px;transform:translateY(105%);transition:transform .32s cubic-bezier(.4,0,.2,1),visibility 0s linear .32s;z-index:50;box-shadow:0 -8px 40px rgba(0,0,0,.6);visibility:hidden;pointer-events:none;}
+.result-overlay.show{transform:translateY(0);visibility:visible;pointer-events:auto;transition:transform .32s cubic-bezier(.4,0,.2,1),visibility 0s linear 0s;}
 .result-status{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800;}
 .result-icon{font-size:26px;}
 .result-answer{font-size:14px;color:var(--text2);line-height:1.6;}
@@ -367,12 +367,11 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
         </div>
         <div class="quiz-choices" id="quiz-choices"></div>
     </div>
-</div>
-
-<div id="result-overlay" class="result-overlay" onclick="nextQuiz()">
-    <div id="result-status" class="result-status"></div>
-    <div id="result-msg" class="result-msg"></div>
-    <div style="color:var(--text2); font-size:14px;">화면을 탭하여 다음 문제</div>
+    <div id="result-overlay" class="result-overlay" onclick="nextQuiz()">
+        <div id="result-status" class="result-status"></div>
+        <div id="result-msg" class="result-msg"></div>
+        <div style="color:var(--text2); font-size:14px;">화면을 탭하여 다음 문제</div>
+    </div>
 </div>
 
 <div id="modal-backdrop" class="modal-backdrop">
@@ -701,6 +700,7 @@ function startQuiz() {
     
     document.getElementById('home-screen').classList.add('hidden');
     document.getElementById('quiz-screen').classList.remove('hidden');
+    resetUiChrome();
     renderQuiz();
 }
 
@@ -777,6 +777,7 @@ function showModal() {
 function goHome() {
     document.getElementById('modal-backdrop').classList.remove('show');
     document.getElementById('detail-backdrop').classList.remove('show');
+    resetUiChrome();
     document.getElementById('flash-screen').classList.add('hidden');
     document.getElementById('quiz-screen').classList.add('hidden');
     document.getElementById('list-screen').classList.add('hidden');
@@ -784,7 +785,17 @@ function goHome() {
     updateStats();
 }
 
+function resetUiChrome() {
+    const ro = document.getElementById('result-overlay');
+    if (ro) ro.classList.remove('show');
+}
+
+window.addEventListener('pageshow', function (e) {
+    if (e.persisted) resetUiChrome();
+});
+
 window.onload = () => {
+    resetUiChrome();
     loadScores();
     setLevel('ALL');
 };
