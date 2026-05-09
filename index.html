@@ -169,8 +169,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 .detail-sheet .next-btn{margin-top:14px;width:100%;}
 
 /* ── RESULT OVERLAY ── */
-.result-overlay{position:absolute;bottom:0;left:0;right:0;padding:20px 20px calc(20px + var(--safe-bottom));background:var(--surface);border-top:1px solid var(--border);border-radius:24px 24px 0 0;display:flex;flex-direction:column;gap:12px;transform:translateY(105%);transition:transform .32s cubic-bezier(.4,0,.2,1),visibility 0s linear .32s;z-index:50;box-shadow:0 -8px 40px rgba(0,0,0,.6);visibility:hidden;pointer-events:none;}
-.result-overlay.show{transform:translateY(0);visibility:visible;pointer-events:auto;transition:transform .32s cubic-bezier(.4,0,.2,1),visibility 0s linear 0s;}
+.result-overlay{position:absolute;bottom:0;left:0;right:0;padding:20px 20px calc(20px + var(--safe-bottom));background:var(--surface);border-top:1px solid var(--border);border-radius:24px 24px 0 0;display:none;flex-direction:column;gap:12px;transform:translateY(105%);transition:transform .32s cubic-bezier(.4,0,.2,1),visibility 0s linear .32s;z-index:50;box-shadow:0 -8px 40px rgba(0,0,0,.6);visibility:hidden;pointer-events:none;}
+.result-overlay.show{display:flex;transform:translateY(0);visibility:visible;pointer-events:auto;transition:transform .32s cubic-bezier(.4,0,.2,1),visibility 0s linear 0s;}
 .result-status{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800;}
 .result-icon{font-size:26px;}
 .result-answer{font-size:14px;color:var(--text2);line-height:1.6;}
@@ -405,23 +405,73 @@ let currentIndex = 0;
 let quizCorrect = 0;
 
 function quizDesc(item) {
-    const raw = (item && item.description != null) ? String(item.description) : '';
-    // Quiz only: show just Korean meaning (hide kana reading)
-    // Typical: "뜻 (かな)" -> "뜻"
-    const beforeParen = raw.split('(')[0];
-    return beforeParen.trim().replace(/\s+/g, ' ');
+    const { meaning, reading } = parseJaDesc(item && item.description);
+    const gloss = (meaning && meaning.trim()) || (reading && reading.trim()) || '';
+    return gloss.replace(/\s+/g, ' ');
 }
 
-/** "뜻 (かな)" 형식 문자열 분리 → 한자 보기·카드 뒷면 (뜻 히라가나) 표기용 */
+/** 한글/가나 문자 수 (대략적 분류용) */
+function countJaScriptUnits(s) {
+    if (!s) return { hangul: 0, kana: 0 };
+    let hangul = 0, kana = 0;
+    for (let i = 0; i < s.length; i++) {
+        const c = s.charCodeAt(i);
+        if (c >= 0xAC00 && c <= 0xD7A3) hangul++;
+        else if ((c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF) || (c >= 0x31F0 && c <= 0x31FF)) kana++;
+    }
+    return { hangul, kana };
+}
+
+/** 괄호 밖/안 두 덩어리 → 한글 열(meaning) / 히라가나·가타카나 열(reading) */
+function meaningReadingFromPair(a, b) {
+    const left = (a || '').trim();
+    const right = (b || '').trim();
+    const { hangul: hl, kana: kl } = countJaScriptUnits(left);
+    const { hangul: hr, kana: kr } = countJaScriptUnits(right);
+    const kind = (h, k) => (k > h ? 'kana' : h > k ? 'hangul' : 'tie');
+    const kindL = kind(hl, kl);
+    const kindR = kind(hr, kr);
+
+    if (kindL === 'hangul' && kindR === 'kana') return { meaning: left, reading: right };
+    if (kindL === 'kana' && kindR === 'hangul') return { meaning: right, reading: left };
+    if (kindL === 'kana' && kindR === 'kana') {
+        // 둘 다 읽기(가나)로 보이면 합치지 말고 중복 제거/우선순위 적용
+        if (!left && !right) return { meaning: '', reading: '' };
+        if (!left) return { meaning: '', reading: right };
+        if (!right) return { meaning: '', reading: left };
+        if (left === right) return { meaning: '', reading: left };
+        // 일반적으로 괄호 안이 더 "읽기"에 가깝다
+        return { meaning: '', reading: right };
+    }
+    if (kindL === 'hangul' && kindR === 'hangul') return { meaning: left, reading: right };
+    if (kindL === 'tie' && kindR === 'kana' && hl > 0) return { meaning: left, reading: right };
+    if (kindL === 'kana' && kindR === 'tie' && hr > 0) return { meaning: right, reading: left };
+    if (kindL === 'hangul' && kindR === 'tie') return { meaning: left, reading: right };
+    if (kindR === 'hangul' && kindL === 'tie') return { meaning: right, reading: left };
+    return { meaning: left, reading: right };
+}
+
+/**
+ * "뜻 (かな)" / "かな (뜻)" / "뜻・かな" / 괄호 없는 히라가나만 등 → 한자 보기·상세·퀴즈 표기용
+ */
 function parseJaDesc(description) {
-    const raw = (description != null ? String(description) : '').trim();
+    let raw = (description != null ? String(description) : '').trim();
+    raw = raw.replace(/（/g, '(').replace(/）/g, ')');
+
+    const delim = raw.match(/^([^/／・｜|]+?)\s*[/／・｜|]\s*(.+)$/);
+    if (delim) return meaningReadingFromPair(delim[1], delim[2]);
+
     const idx = raw.lastIndexOf('(');
     const end = raw.lastIndexOf(')');
     if (idx >= 0 && end > idx) {
-        const meaning = raw.slice(0, idx).trim();
-        const reading = raw.slice(idx + 1, end).trim();
-        return { meaning, reading };
+        const outside = raw.slice(0, idx).trim();
+        const inside = raw.slice(idx + 1, end).trim();
+        return meaningReadingFromPair(outside, inside);
     }
+
+    const { hangul, kana } = countJaScriptUnits(raw);
+    if (kana > 0 && hangul === 0) return { meaning: '', reading: raw };
+    if (hangul > 0 && kana === 0) return { meaning: raw, reading: '' };
     return { meaning: raw, reading: '' };
 }
 
@@ -429,6 +479,7 @@ function detailMetaLine(description) {
     const { meaning, reading } = parseJaDesc(description);
     if (meaning && reading) return '(' + meaning + ' ' + reading + ')';
     if (meaning) return '(' + meaning + ')';
+    if (reading) return '(' + reading + ')';
     return '(—)';
 }
 
@@ -443,12 +494,32 @@ function flashBackLine(description) {
 
 function loadScores() {
     const saved = localStorage.getItem('jlpt_scores');
-    if (saved) scores = JSON.parse(saved);
+    if (!saved) {
+        scores = {};
+        return;
+    }
+    try {
+        const parsed = JSON.parse(saved);
+        scores = parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        scores = {};
+        localStorage.removeItem('jlpt_scores');
+    }
 }
 
 function saveScores() {
     localStorage.setItem('jlpt_scores', JSON.stringify(scores));
     updateStats();
+}
+
+function showOnlyScreen(screenId) {
+    const ids = ['home-screen', 'flash-screen', 'quiz-screen', 'list-screen'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (id === screenId) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+    });
 }
 
 function setLevel(lvl) {
@@ -500,10 +571,7 @@ function openKanjiList(lvl) {
     currentList = [...base].sort((a, b) => (a.id || 0) - (b.id || 0));
     currentIndex = 0;
 
-    document.getElementById('home-screen').classList.add('hidden');
-    document.getElementById('flash-screen').classList.add('hidden');
-    document.getElementById('quiz-screen').classList.add('hidden');
-    document.getElementById('list-screen').classList.remove('hidden');
+    showOnlyScreen('list-screen');
 
     const tag = document.getElementById('list-level-tag');
     if (tag) tag.textContent = '(' + lvl + ')';
@@ -615,14 +683,17 @@ function startMode(mode) {
     currentList = [...base].sort(() => Math.random() - 0.5);
     currentIndex = 0;
     
-    document.getElementById('home-screen').classList.add('hidden');
-    document.getElementById('flash-screen').classList.remove('hidden');
+    showOnlyScreen('flash-screen');
     document.getElementById('flash-level-tag').textContent = '(' + currentLevel + ')';
     renderCard();
 }
 
 function renderCard() {
     const item = currentList[currentIndex];
+    if (!item) {
+        showModal();
+        return;
+    }
     const fc = document.getElementById('flashcard');
     fc.classList.add('no-flip-anim');
     fc.classList.remove('flipped');
@@ -698,14 +769,17 @@ function startQuiz() {
     currentIndex = 0;
     quizCorrect = 0;
     
-    document.getElementById('home-screen').classList.add('hidden');
-    document.getElementById('quiz-screen').classList.remove('hidden');
+    showOnlyScreen('quiz-screen');
     resetUiChrome();
     renderQuiz();
 }
 
 function renderQuiz() {
     const item = currentList[currentIndex];
+    if (!item) {
+        showModal();
+        return;
+    }
     document.getElementById('q-kanji').textContent = item.kanji;
     document.getElementById('q-badge').textContent = item.jlpt;
     document.getElementById('q-badge').style.color = 'var(--' + item.jlpt.toLowerCase() + ')';
@@ -778,10 +852,7 @@ function goHome() {
     document.getElementById('modal-backdrop').classList.remove('show');
     document.getElementById('detail-backdrop').classList.remove('show');
     resetUiChrome();
-    document.getElementById('flash-screen').classList.add('hidden');
-    document.getElementById('quiz-screen').classList.add('hidden');
-    document.getElementById('list-screen').classList.add('hidden');
-    document.getElementById('home-screen').classList.remove('hidden');
+    showOnlyScreen('home-screen');
     updateStats();
 }
 
