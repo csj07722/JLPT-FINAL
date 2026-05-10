@@ -2,12 +2,15 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="JLPT N2 단어장">
+    <meta name="theme-color" content="#0f0f13" media="(prefers-color-scheme: dark)">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>JLPT N2 단어장</title>
     <style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
 html{color-scheme:dark;}
 button{-webkit-appearance:none;appearance:none;}
 :root{
@@ -26,7 +29,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 .screen.hidden{transform:translateX(100%);opacity:0;pointer-events:none;visibility:hidden;}
 
 /* ── HOME ── */
-#home-screen{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(28px + var(--safe-bottom));}
+#home-screen{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(28px + var(--safe-bottom));overscroll-behavior:contain;touch-action:pan-y;}
 .home-header{padding:calc(var(--safe-top) + 22px) 20px 18px;background:var(--surface);border-bottom:1px solid var(--border);}
 .home-title{font-size:26px;font-weight:800;letter-spacing:-.8px;}
 .home-title span{color:var(--accent2);}
@@ -124,7 +127,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 
 /* ── QUIZ SCREEN ── */
 #quiz-screen{background:var(--bg);position:relative;overflow:hidden;}
-.quiz-body{flex:1;display:flex;flex-direction:column;padding:16px 20px calc(16px + var(--safe-bottom));gap:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;}
+.quiz-body{flex:1;display:flex;flex-direction:column;padding:16px 20px calc(16px + var(--safe-bottom));gap:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;touch-action:pan-y;overscroll-behavior:contain;}
 .quiz-prog-wrap{display:flex;align-items:center;gap:10px;}
 .quiz-prog-bar{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;}
 .quiz-prog-fill{height:100%;background:var(--accent2);border-radius:3px;transition:width .4s ease;}
@@ -217,6 +220,276 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'SF P
 .modal-btn { background: var(--accent); color: white; border: none; padding: 1rem 2rem; border-radius: 1rem; cursor: pointer; font-weight: 700; font-size: 1.1rem; transition: transform 0.2s; }
 .modal-btn:active { transform: scale(0.95); }
 .resume-btn { margin-top: 8px; background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* ── iPHONE 17 PRO SAFARI 최적화 ── */
+
+/* Dynamic Island / Notch 대응 강화 */
+:root {
+  --safe-top: env(safe-area-inset-top, 54px);
+  --safe-bottom: env(safe-area-inset-bottom, 34px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* 전체 높이: dvh 사용 (iOS 사파리 주소창 변동 대응) */
+html, body {
+  min-height: 100dvh;
+  height: 100dvh;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 화면 고정 레이아웃 */
+.screen {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  overscroll-behavior: none;
+}
+
+/* 홈 헤더 Dynamic Island 여유 증가 */
+.home-header {
+  padding-top: calc(var(--safe-top) + 16px);
+}
+
+/* 모든 스크롤 영역에 모멘텀 스크롤 + 오버스크롤 방지 */
+.kanji-list-scroll,
+#home-screen,
+.quiz-body {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* 터치 타겟 최소 44pt 보장 */
+.level-pill {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+}
+
+.mode-card {
+  min-height: 68px;
+}
+
+.quick-btn {
+  min-height: 50px;
+}
+
+.nav-btn {
+  min-height: 50px;
+}
+
+.rate-btn {
+  min-height: 52px;
+  padding: 14px 4px;
+  font-size: 15px;
+  border-radius: 16px;
+}
+
+.back-btn {
+  min-width: 52px;
+  min-height: 52px;
+  font-size: 32px;
+}
+
+.choice-btn {
+  min-height: 56px;
+  padding: 16px 18px;
+  font-size: 16px;
+}
+
+/* 플래시카드 높이 iPhone 17 Pro 화면 맞춤 */
+.flashcard-wrap {
+  height: 260px;
+}
+
+/* 카드 한자 크기 조정 (큰 화면 활용) */
+.card-kanji {
+  font-size: 96px;
+}
+
+/* 퀴즈 한자도 크게 */
+.quiz-kanji {
+  font-size: 100px;
+}
+
+/* 상세 모달 한자 */
+#detail-kanji {
+  font-size: min(96px, 26vw);
+}
+
+/* 사파리 3D 변환 버그 수정 */
+.flashcard {
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+  -webkit-perspective: 1200px;
+}
+
+.card-face {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+}
+
+.card-front {
+  -webkit-transform: rotateY(0deg) translateZ(1px);
+  transform: rotateY(0deg) translateZ(1px);
+}
+
+.card-back {
+  -webkit-transform: rotateY(180deg) translateZ(1px);
+  transform: rotateY(180deg) translateZ(1px);
+}
+
+.flashcard.flipped {
+  -webkit-transform: rotateY(180deg);
+  transform: rotateY(180deg);
+}
+
+/* 클릭/탭 색상 하이라이트 제거 */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* 텍스트 선택 방지 (학습 UI) */
+.flashcard-wrap, .rate-btns, .nav-btns, .level-pills, .mode-list, .quick-actions {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 사파리 버튼 렌더링 버그 수정 */
+button {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* 포커스 링 제거 (터치 UI) */
+button:focus, .mode-card:focus, .kanji-row:focus {
+  outline: none;
+}
+
+/* 스터디 헤더 safe-area */
+.study-header {
+  padding-top: calc(var(--safe-top) + 10px);
+  padding-left: calc(12px + var(--safe-left));
+  padding-right: calc(12px + var(--safe-right));
+}
+
+/* 푸터 safe-area */
+.flash-footer {
+  padding-bottom: calc(12px + var(--safe-bottom));
+}
+
+.modal-sheet, .modal-cancel {
+  padding-bottom: calc(16px + var(--safe-bottom));
+}
+
+/* 퀴즈 바디 safe-area */
+.quiz-body {
+  padding-bottom: calc(20px + var(--safe-bottom));
+}
+
+/* 카운터 폰트 가독성 */
+.card-counter, .quiz-counter {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+/* 모달 바디 safe-area */
+.modal-sheet {
+  padding-bottom: calc(28px + var(--safe-bottom));
+}
+
+/* 상세 모달 safe-area */
+.detail-sheet {
+  padding-bottom: calc(26px + var(--safe-bottom));
+}
+
+/* 결과 오버레이 safe-area */
+.result-overlay {
+  padding-bottom: calc(24px + var(--safe-bottom));
+}
+
+/* 리스트 바디 safe-area */
+.list-body {
+  padding-bottom: calc(16px + var(--safe-bottom));
+}
+
+/* 120Hz 프로모션 디스플레이 애니메이션 최적화 */
+.flashcard, .screen, .modal-sheet, .result-overlay, .detail-sheet {
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+}
+
+/* 홈 컨텐츠 safe-area 하단 */
+#home-screen {
+  padding-bottom: calc(32px + var(--safe-bottom));
+}
+
+/* 스탯 카드 패딩 증가 */
+.stats-card {
+  padding: 18px;
+}
+
+/* 프로그레스바 조금 두껍게 */
+.progress-bar {
+  height: 10px;
+  border-radius: 5px;
+}
+
+/* 한자 리스트 행 패딩 늘려서 탭 편하게 */
+.kanji-row {
+  padding: 14px 14px;
+  min-height: 52px;
+}
+
+/* 픽셀 버그 방지: iOS에서 1px 라인 선명하게 */
+@supports (-webkit-touch-callout: none) {
+  .home-header,
+  .study-header,
+  .flash-footer,
+  .prog-bar-wrap,
+  .kanji-list-head,
+  .kanji-row {
+    border-width: 0.5px;
+  }
+}
+
+/* iOS 사파리 bounce 방지 (body 레벨) */
+body {
+  overscroll-behavior: none;
+}
+
+/* 레벨 섹션 좌우 패딩 */
+.level-section {
+  padding: 18px 20px 0;
+}
+
+/* 섹션 간격 */
+.mode-section {
+  padding: 18px 20px 0;
+}
+
+/* 빠른 액션 */
+.quick-actions {
+  padding: 16px 20px 0;
+}
+
+/* stats-row 간격 증가 */
+.stats-row {
+  margin-bottom: 14px;
+}
+
+/* stat 값 폰트 */
+.stat-value {
+  font-size: 24px;
+}
+
 </style>
 </head>
 <body>
@@ -879,7 +1152,9 @@ function renderCard() {
 }
 
 function flipCard() {
-    document.getElementById('flashcard').classList.toggle('flipped');
+    requestAnimationFrame(function() {
+        document.getElementById('flashcard').classList.toggle('flipped');
+    });
 }
 
 function rate(type) {
@@ -1113,6 +1388,23 @@ function JLPT_auditDescMatching() {
     console.groupEnd();
     return { total: ALL_DATA.length, count: issues.length, issues: issues.slice() };
 }
+
+
+// iOS 사파리 passive 이벤트 최적화
+(function() {
+  var passiveOpts = { passive: true };
+  var scrollEls = document.querySelectorAll('.kanji-list-scroll, #home-screen, .quiz-body');
+  scrollEls.forEach(function(el) {
+    el.addEventListener('touchstart', function(){}, passiveOpts);
+    el.addEventListener('touchmove', function(){}, passiveOpts);
+  });
+  
+  // iOS 사파리: body fixed 시 scroll 위치 보존
+  var scrollY = 0;
+  window.addEventListener('scroll', function() {
+    scrollY = window.scrollY;
+  }, passiveOpts);
+})();
 
 window.onload = () => {
     resetUiChrome();
