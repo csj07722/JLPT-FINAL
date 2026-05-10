@@ -403,6 +403,9 @@ let currentLevel = 'ALL';
 let currentList = [];
 let currentIndex = 0;
 let quizCorrect = 0;
+let flashDeckMode = null;
+
+const JLPT_WHOLE_FLASH_KEY = 'jlpt_whole_flash_sessions';
 
 function quizDesc(item) {
     const { meaning, reading } = parseJaDesc(item && item.description);
@@ -475,6 +478,64 @@ function parseJaDesc(description) {
     return { meaning: raw, reading: '' };
 }
 
+let _quizChoiceLabelById = null;
+
+function buildQuizChoiceLabels() {
+    const rows = ALL_DATA.map((it) => {
+        const g = quizDesc(it);
+        const r = (parseJaDesc(it.description).reading || '').trim();
+        const k = it.kanji != null ? String(it.kanji).trim() : '';
+        return { it, g, r, k };
+    });
+
+    const provisional = (x) => {
+        if (x.r) return x.g + ' (' + x.r + ')';
+        if (x.k && x.k !== x.g) return x.g + ' — ' + x.k;
+        return x.g;
+    };
+
+    const idToLab = new Map();
+    rows.forEach((x) => idToLab.set(x.it.id, provisional(x)));
+
+    const lumpByLabel = (m) => {
+        const labToIds = new Map();
+        m.forEach((lab, id) => {
+            if (!labToIds.has(lab)) labToIds.set(lab, []);
+            labToIds.get(lab).push(id);
+        });
+        return labToIds;
+    };
+
+    let lump = lumpByLabel(idToLab);
+    lump.forEach((ids, lab) => {
+        if (ids.length <= 1) return;
+        ids.forEach((id) => {
+            const x = rows.find((o) => o.it.id === id);
+            const suf = x.k ? ' · ' + x.k : '';
+            idToLab.set(id, lab + suf);
+        });
+    });
+
+    lump = lumpByLabel(idToLab);
+    lump.forEach((ids, lab) => {
+        if (ids.length <= 1) return;
+        ids.forEach((id) => {
+            idToLab.set(id, idToLab.get(id) + ' #' + id);
+        });
+    });
+
+    return idToLab;
+}
+
+/** 4지선다에 쓰는 유일한 문자열(한글 중복 시 읽기·한자로 구분) */
+function quizChoiceLabel(item) {
+    if (!item) return '';
+    if (!_quizChoiceLabelById) _quizChoiceLabelById = buildQuizChoiceLabels();
+    const id = item.id;
+    if (id != null && _quizChoiceLabelById.has(id)) return _quizChoiceLabelById.get(id);
+    return quizDesc(item);
+}
+
 function detailMetaLine(description) {
     const { meaning, reading } = parseJaDesc(description);
     if (meaning && reading) return '(' + meaning + ' ' + reading + ')';
@@ -510,6 +571,83 @@ function loadScores() {
 function saveScores() {
     localStorage.setItem('jlpt_scores', JSON.stringify(scores));
     updateStats();
+}
+
+function readWholeFlashSessions() {
+    try {
+        const raw = localStorage.getItem(JLPT_WHOLE_FLASH_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function writeWholeFlashSessions(obj) {
+    localStorage.setItem(JLPT_WHOLE_FLASH_KEY, JSON.stringify(obj));
+}
+
+function idsMatchWholeDeck(ids, base) {
+    if (!ids || ids.length !== base.length) return false;
+    const idSet = new Set(base.map(d => d.id));
+    const seen = new Set();
+    for (const id of ids) {
+        if (!idSet.has(id)) return false;
+        if (seen.has(id)) return false;
+        seen.add(id);
+    }
+    return true;
+}
+
+function rebuildWholeListFromIds(ids) {
+    const byId = new Map(ALL_DATA.map(d => [d.id, d]));
+    const list = [];
+    for (let i = 0; i < ids.length; i++) {
+        const item = byId.get(ids[i]);
+        if (!item) return null;
+        list.push(item);
+    }
+    return list;
+}
+
+function loadWholeFlashResume(level, base) {
+    const sessions = readWholeFlashSessions()[level];
+    if (!sessions || !Array.isArray(sessions.ids)) return null;
+    if (!idsMatchWholeDeck(sessions.ids, base)) return null;
+    const list = rebuildWholeListFromIds(sessions.ids);
+    if (!list) return null;
+    let idx = Number(sessions.idx);
+    if (!Number.isFinite(idx)) idx = 0;
+    idx = Math.max(0, Math.min(idx, list.length - 1));
+    return { list, idx };
+}
+
+function saveWholeFlashSession(level) {
+    if (flashDeckMode !== 'all' || !currentList.length) return;
+    const sessions = readWholeFlashSessions();
+    sessions[level] = {
+        ids: currentList.map(d => d.id),
+        idx: currentIndex,
+    };
+    writeWholeFlashSessions(sessions);
+}
+
+function clearWholeFlashSession(level) {
+    const sessions = readWholeFlashSessions();
+    delete sessions[level];
+    writeWholeFlashSessions(sessions);
+}
+
+function persistWholeFlashIfLeaving() {
+    const flashEl = document.getElementById('flash-screen');
+    const flashVisible = flashEl && !flashEl.classList.contains('hidden');
+    const modalOpen = document.getElementById('modal-backdrop').classList.contains('show');
+    if (!flashVisible || flashDeckMode !== 'all' || !currentList.length) return;
+    if (modalOpen) {
+        clearWholeFlashSession(currentLevel);
+    } else {
+        saveWholeFlashSession(currentLevel);
+    }
 }
 
 function showOnlyScreen(screenId) {
@@ -556,12 +694,14 @@ function resetLevel(lvl) {
     });
     localStorage.setItem('jlpt_scores', JSON.stringify(parsed));
     scores = parsed;
+    clearWholeFlashSession(lvl);
     updateStats();
 }
 
 function resetAllScores() {
     if(!confirm('전체 기록을 초기화할까요?')) return;
     localStorage.removeItem('jlpt_scores');
+    localStorage.removeItem(JLPT_WHOLE_FLASH_KEY);
     scores = {};
     updateStats();
 }
@@ -594,6 +734,12 @@ function renderKanjiGrid() {
             '<div class="kr-h">' + escHtml(h) + '</div>' +
             '</div>';
     }).join('');
+    grid.scrollTop = 0;
+    grid.scrollLeft = 0;
+    requestAnimationFrame(() => {
+        grid.scrollTop = 0;
+        grid.scrollLeft = 0;
+    });
 }
 
 function openDetail(idx) {
@@ -680,8 +826,22 @@ function startMode(mode) {
     
     if (base.length === 0) return alert('단어가 없습니다!');
 
-    currentList = [...base].sort(() => Math.random() - 0.5);
-    currentIndex = 0;
+    flashDeckMode = mode;
+
+    if (mode === 'all') {
+        const resume = loadWholeFlashResume(currentLevel, base);
+        if (resume) {
+            currentList = resume.list;
+            currentIndex = resume.idx;
+        } else {
+            currentList = [...base].sort(() => Math.random() - 0.5);
+            currentIndex = 0;
+            clearWholeFlashSession(currentLevel);
+        }
+    } else {
+        currentList = [...base].sort(() => Math.random() - 0.5);
+        currentIndex = 0;
+    }
     
     showOnlyScreen('flash-screen');
     document.getElementById('flash-level-tag').textContent = '(' + currentLevel + ')';
@@ -730,6 +890,7 @@ function rate(type) {
         currentIndex++;
         renderCard();
     } else {
+        if (flashDeckMode === 'all') clearWholeFlashSession(currentLevel);
         showModal();
     }
 }
@@ -786,26 +947,26 @@ function renderQuiz() {
     document.getElementById('q-badge').style.border = '1px solid var(--' + item.jlpt.toLowerCase() + ')';
     document.getElementById('quiz-counter').textContent = (currentIndex + 1) + ' / ' + currentList.length;
     
-    const correctDesc = quizDesc(item);
-    let others = ALL_DATA.filter(d => quizDesc(d) !== correctDesc);
+    const correctLb = quizChoiceLabel(item);
+    let others = ALL_DATA.filter((d) => quizChoiceLabel(d) !== correctLb);
     let choices = [item];
-    let usedDescs = new Set([correctDesc]);
-    
-    while(choices.length < 4 && others.length > 0) {
+    let usedLabs = new Set([correctLb]);
+
+    while (choices.length < 4 && others.length > 0) {
         let idx = Math.floor(Math.random() * others.length);
         let rand = others[idx];
-        const randDesc = quizDesc(rand);
-        if(!usedDescs.has(randDesc)) {
+        const randLb = quizChoiceLabel(rand);
+        if (!usedLabs.has(randLb)) {
             choices.push(rand);
-            usedDescs.add(randDesc);
+            usedLabs.add(randLb);
         }
         others.splice(idx, 1);
     }
     choices.sort(() => Math.random() - 0.5);
-    
+
     const container = document.getElementById('quiz-choices');
-    container.innerHTML = choices.map(c => {
-        return `<button class="choice-btn" onclick="checkAnswer(${c.id === item.id}, this)">${quizDesc(c)}</button>`;
+    container.innerHTML = choices.map((c) => {
+        return `<button class="choice-btn" onclick="checkAnswer(${c.id === item.id}, this)">${quizChoiceLabel(c)}</button>`;
     }).join('');
 }
 
@@ -823,7 +984,7 @@ function checkAnswer(isCorrect, btn) {
     } else {
         btn.classList.add('wrong');
         status.textContent = '❌';
-        msg.textContent = '틀렸습니다! 정답: ' + quizDesc(item);
+        msg.textContent = '틀렸습니다! 정답: ' + quizChoiceLabel(item);
         scores[item.id] = 'vague';
         saveScores();
     }
@@ -849,6 +1010,8 @@ function showModal() {
 }
 
 function goHome() {
+    persistWholeFlashIfLeaving();
+    flashDeckMode = null;
     document.getElementById('modal-backdrop').classList.remove('show');
     document.getElementById('detail-backdrop').classList.remove('show');
     resetUiChrome();
@@ -865,10 +1028,100 @@ window.addEventListener('pageshow', function (e) {
     if (e.persisted) resetUiChrome();
 });
 
+document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'hidden') return;
+    persistWholeFlashIfLeaving();
+});
+
+/**
+ * 레이아웃 변경 없음. 개발자도구(F12 → Console)에서 실행:
+ *   JLPT_auditDescMatching()
+ * 한글 뜻 / 히라·가타 열이 parseJaDesc 기준으로 뒤바뀐 듯할 때만 경고로 잡음(형식별 예외는 있음).
+ */
+function JLPT_auditDescMatching() {
+    function parenBalanced(norm) {
+        let d = 0;
+        for (let k = 0; k < norm.length; k++) {
+            if (norm[k] === '(') d++;
+            else if (norm[k] === ')') d--;
+            if (d < 0) return false;
+        }
+        return d === 0;
+    }
+
+    const issues = [];
+    for (const item of ALL_DATA) {
+        const jlpt = item.jlpt || '?';
+        const id = item.id;
+        const kanji = item.kanji != null ? String(item.kanji).trim() : '';
+        const descRaw = item.description != null ? String(item.description).trim() : '';
+        const norm = descRaw.replace(/（/g, '(').replace(/）/g, ')');
+        const tag = '[' + jlpt + ' id:' + id + ']';
+
+        if (!kanji) issues.push(tag + ' 오류: 표제(kanji) 비어 있음');
+        if (!descRaw) issues.push(tag + ' 오류: description 비어 있음');
+        else if (!parenBalanced(norm))
+            issues.push(tag + ' 오류: 괄호 () 짝 불일치 — ' + JSON.stringify(descRaw.slice(0, 100)));
+
+        const pr = parseJaDesc(descRaw);
+        const meaning = pr.meaning || '';
+        const reading = pr.reading || '';
+        const m = countJaScriptUnits(meaning);
+        const r = countJaScriptUnits(reading);
+
+        if (descRaw && !meaning && !reading)
+            issues.push(tag + ' 경고: 파싱 후 한글 뜻·가나가 둘 다 비어 있음');
+
+        if (meaning && m.kana >= 2 && m.hangul === 0 && m.kana > m.hangul)
+            issues.push(
+                tag +
+                    ' 경고: 뜻 열처럼 쓰이는 문자열에 가나만 많음 → ' +
+                    JSON.stringify(meaning) +
+                    ' | raw:' +
+                    JSON.stringify(descRaw.slice(0, 120))
+            );
+        if (reading && r.hangul >= 2 && r.kana === 0 && r.hangul > r.kana)
+            issues.push(
+                tag +
+                    ' 경고: 읽기 열처럼 쓰이는 문자열에 한글만 많음 → ' +
+                    JSON.stringify(reading) +
+                    ' | raw:' +
+                    JSON.stringify(descRaw.slice(0, 120))
+            );
+
+        const gl = quizDesc(item);
+        if (descRaw && !String(gl || '').trim()) issues.push(tag + ' 오류: 퀴즈 표시 문구 빈 문자열');
+    }
+
+    const byQ = {};
+    ALL_DATA.forEach((item) => {
+        const q = quizChoiceLabel(item);
+        if (!byQ[q]) byQ[q] = [];
+        byQ[q].push(item.id);
+    });
+    Object.keys(byQ).forEach((g) => {
+        const ids = byQ[g];
+        if (!String(g || '').trim() || ids.length < 2) return;
+        issues.push('[퀴즈 선택지] 동일 표기 "' + g + '" — ids: ' + ids.join(', '));
+    });
+
+    console.groupCollapsed(
+        '[JLPT] 한글·히라가나 매칭 점검 — ' + issues.length + '건 / ' + ALL_DATA.length + '개'
+    );
+    if (!issues.length) console.log('문제 검출 없음 (이 규칙 기준)');
+    else issues.forEach((line, i) => console.log(String(i + 1) + '.', line));
+    console.groupEnd();
+    return { total: ALL_DATA.length, count: issues.length, issues: issues.slice() };
+}
+
 window.onload = () => {
     resetUiChrome();
     loadScores();
     setLevel('ALL');
+    // 레이아웃 없음 — 주소줄 예: index.html?audit=1
+    try {
+        if (/[?&]audit=1(?:&|$)/.test(location.search)) JLPT_auditDescMatching();
+    } catch (_) {}
 };
 </script>
 </body>
